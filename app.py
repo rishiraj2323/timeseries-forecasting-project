@@ -9,23 +9,46 @@ feature_cols = joblib.load('timeseries_feature_cols.pkl')
 store_latest_features = joblib.load('store_latest_features.pkl')
 state_holiday_mapping = joblib.load('state_holiday_mapping.pkl')
 
-@app.route('/')
-def home():
-    return "Time Series Sales Forecasting API is running"
+HTML_FORM = """
+<!DOCTYPE html>
+<html>
+<head><title>Sales Forecast Demo</title></head>
+<body style="font-family: Arial; max-width: 500px; margin: 50px auto;">
+<h2>Retail Sales Forecasting Demo</h2>
+<form method="POST" action="/">
+    <label>Store ID (1-1115):</label><br>
+    <input type="number" name="store_id" value="769" required><br><br>
+    <label>Date:</label><br>
+    <input type="date" name="date" value="2015-08-15" required><br><br>
+    <label>Promo running?</label><br>
+    <select name="promo">
+        <option value="1">Yes</option>
+        <option value="0">No</option>
+    </select><br><br>
+    <label>State Holiday:</label><br>
+    <select name="state_holiday">
+        <option value="0">None</option>
+        <option value="a">Public holiday</option>
+        <option value="b">Easter</option>
+        <option value="c">Christmas</option>
+    </select><br><br>
+    <label>School Holiday?</label><br>
+    <select name="school_holiday">
+        <option value="0">No</option>
+        <option value="1">Yes</option>
+    </select><br><br>
+    <button type="submit">Predict Sales</button>
+</form>
+{result}
+</body>
+</html>
+"""
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    data = request.get_json()
-
-    store_id = int(data['store_id'])
-    date = pd.to_datetime(data['date'])
-    promo = int(data['promo'])
-    state_holiday = str(data.get('state_holiday', '0'))
-    school_holiday = int(data.get('school_holiday', 0))
-
+def make_prediction(store_id, date_str, promo, state_holiday, school_holiday):
+    date = pd.to_datetime(date_str)
     store_row = store_latest_features[store_latest_features['Store'] == store_id]
     if store_row.empty:
-        return jsonify({'error': f'Store {store_id} not found'}), 404
+        return None
     store_row = store_row.iloc[0]
 
     day_of_week = date.dayofweek + 1
@@ -53,12 +76,42 @@ def predict():
     }
 
     X_input = pd.DataFrame([input_row])[feature_cols]
-    prediction = model.predict(X_input)[0]
+    return round(float(model.predict(X_input)[0]), 2)
 
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    result_html = ""
+    if request.method == 'POST':
+        store_id = int(request.form['store_id'])
+        date_str = request.form['date']
+        promo = int(request.form['promo'])
+        state_holiday = request.form['state_holiday']
+        school_holiday = int(request.form['school_holiday'])
+
+        prediction = make_prediction(store_id, date_str, promo, state_holiday, school_holiday)
+        if prediction is None:
+            result_html = f"<h3 style='color:red'>Store {store_id} not found (valid range: 1-1115)</h3>"
+        else:
+            result_html = f"<h3 style='color:green'>Predicted Sales: {prediction}</h3>"
+
+    return HTML_FORM.format(result=result_html)
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = request.get_json()
+    prediction = make_prediction(
+        int(data['store_id']),
+        data['date'],
+        int(data['promo']),
+        str(data.get('state_holiday', '0')),
+        int(data.get('school_holiday', 0))
+    )
+    if prediction is None:
+        return jsonify({'error': f"Store {data['store_id']} not found"}), 404
     return jsonify({
-        'store_id': store_id,
+        'store_id': int(data['store_id']),
         'date': str(data['date']),
-        'predicted_sales': round(float(prediction), 2)
+        'predicted_sales': prediction
     })
 
 if __name__ == '__main__':
