@@ -43,8 +43,9 @@ Time-based train/test split (never random shuffle for time series) - last 6 week
 | SARIMA(1,1,1)x(0,1,1,7) | Single store, univariate | 1378.47 | 1647.01 | 11.54% |
 | LightGBM | All 1,115 stores, multivariate | 648.41 | 933.16 | 9.80% |
 | XGBoost (final model) | All 1,115 stores, multivariate | 627.48 | 904.37 | 9.49% |
+| XGBoost (Store 769 only, fair comparison) | Single store, multivariate | 905.89 | 1250.01 | 7.41% |
 
-Note: the SARIMA vs ML comparison is not perfectly apples-to-apples - SARIMA was fit on one store with no external features, while the ML models use all stores plus Promo/Holiday/Competition features.
+Note: the SARIMA vs ML comparison is not perfectly apples-to-apples - SARIMA was fit on one store with no external features, while the ML models use all stores plus Promo/Holiday/Competition features. For a fairer check, XGBoost was also evaluated on Store 769 alone (same store, same test period) - it still outperforms SARIMA (905.89 vs 1378.47 MAE, a ~34% improvement), confirming the gain isn't purely from pooling stores.
 
 ### 5. Hyperparameter Tuning
 Tuned XGBoost via RandomizedSearchCV with TimeSeriesSplit (not standard k-fold, to avoid future-data leakage). The tuned model scored slightly worse on held-out test (MAE 635.77) than the untuned default (MAE 627.48) - untuned model kept as final.
